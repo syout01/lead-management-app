@@ -85,14 +85,41 @@ CREATE TRIGGER leads_updated_at
   BEFORE UPDATE ON leads
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- 6. インデックス
+-- 6. ドキュメントテーブル（資料トラッキング）
+CREATE TABLE documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lead_id UUID NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('pdf', 'url')),
+  file_path TEXT DEFAULT '',
+  external_url TEXT DEFAULT '',
+  tracking_id TEXT NOT NULL UNIQUE,
+  created_by UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 7. ドキュメント閲覧履歴テーブル
+CREATE TABLE document_views (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  duration INTEGER DEFAULT 0,
+  ip_address TEXT DEFAULT '',
+  user_agent TEXT DEFAULT ''
+);
+
+-- 8. インデックス
 CREATE INDEX idx_leads_status ON leads(status);
 CREATE INDEX idx_leads_next_action_date ON leads(next_action_date);
 CREATE INDEX idx_leads_created_by ON leads(created_by);
 CREATE INDEX idx_activities_lead_id ON activities(lead_id);
 CREATE INDEX idx_activities_created_at ON activities(created_at);
+CREATE INDEX idx_documents_lead_id ON documents(lead_id);
+CREATE INDEX idx_documents_tracking_id ON documents(tracking_id);
+CREATE INDEX idx_document_views_document_id ON document_views(document_id);
+CREATE INDEX idx_document_views_viewed_at ON document_views(viewed_at);
 
--- 7. Row Level Security（RLS）
+-- 9. Row Level Security（RLS）
 -- 認証済みユーザーは全データにアクセス可能（チーム利用前提）
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
@@ -103,3 +130,11 @@ CREATE POLICY "authenticated_profiles" ON profiles FOR ALL TO authenticated USIN
 CREATE POLICY "authenticated_companies" ON companies FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "authenticated_leads" ON leads FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "authenticated_activities" ON activities FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_views ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "authenticated_documents" ON documents FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "authenticated_views" ON document_views FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "anon_insert_views" ON document_views FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "anon_read_documents" ON documents FOR SELECT TO anon USING (true);

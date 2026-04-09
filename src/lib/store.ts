@@ -3,12 +3,14 @@
 // Phase 1ではSupabaseの代わりにlocalStorageで動作
 // ========================================
 
-import { Company, Lead, Activity, LeadStatus, ActivityType } from "./types";
+import { Company, Lead, Activity, LeadStatus, ActivityType, TrackedDocument, DocumentView, DocumentType, RecentView } from "./types";
 
 const STORAGE_KEYS = {
   companies: "lm_companies",
   leads: "lm_leads",
   activities: "lm_activities",
+  documents: "lm_documents",
+  documentViews: "lm_document_views",
 };
 
 // ========================================
@@ -158,6 +160,110 @@ export function createActivity(data: Omit<Activity, "id" | "createdAt">): Activi
 }
 
 // ========================================
+// ドキュメント（TrackedDocument）操作
+// ========================================
+function generateTrackingId(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "";
+  const arr = new Uint8Array(10);
+  crypto.getRandomValues(arr);
+  for (let i = 0; i < 10; i++) {
+    result += chars[arr[i] % chars.length];
+  }
+  return result;
+}
+
+export function getDocuments(): TrackedDocument[] {
+  return getFromStorage<TrackedDocument>(STORAGE_KEYS.documents);
+}
+
+export function getDocumentsByLead(leadId: string): TrackedDocument[] {
+  return getDocuments().filter((d) => d.leadId === leadId);
+}
+
+export function getDocumentByTrackingId(trackingId: string): TrackedDocument | undefined {
+  return getDocuments().find((d) => d.trackingId === trackingId);
+}
+
+export function createDocument(data: Omit<TrackedDocument, "id" | "createdAt" | "trackingId">): TrackedDocument {
+  const documents = getDocuments();
+  const doc: TrackedDocument = {
+    ...data,
+    id: generateId(),
+    trackingId: generateTrackingId(),
+    createdAt: new Date().toISOString(),
+  };
+  documents.push(doc);
+  saveToStorage(STORAGE_KEYS.documents, documents);
+  return doc;
+}
+
+export function deleteDocument(id: string): boolean {
+  const documents = getDocuments();
+  const filtered = documents.filter((d) => d.id !== id);
+  if (filtered.length === documents.length) return false;
+  saveToStorage(STORAGE_KEYS.documents, filtered);
+  const views = getDocumentViews().filter((v) => v.documentId !== id);
+  saveToStorage(STORAGE_KEYS.documentViews, views);
+  return true;
+}
+
+// ========================================
+// ドキュメント閲覧履歴（DocumentView）操作
+// ========================================
+export function getDocumentViews(): DocumentView[] {
+  return getFromStorage<DocumentView>(STORAGE_KEYS.documentViews);
+}
+
+export function getDocumentViewsByDoc(documentId: string): DocumentView[] {
+  return getDocumentViews()
+    .filter((v) => v.documentId === documentId)
+    .sort((a, b) => new Date(b.viewedAt).getTime() - new Date(a.viewedAt).getTime());
+}
+
+export function createDocumentView(data: Omit<DocumentView, "id" | "viewedAt">): DocumentView {
+  const views = getDocumentViews();
+  const view: DocumentView = {
+    ...data,
+    id: generateId(),
+    viewedAt: new Date().toISOString(),
+  };
+  views.push(view);
+  saveToStorage(STORAGE_KEYS.documentViews, views);
+  return view;
+}
+
+export function updateDocumentViewDuration(id: string, duration: number): void {
+  const views = getDocumentViews();
+  const index = views.findIndex((v) => v.id === id);
+  if (index !== -1) {
+    views[index].duration = duration;
+    saveToStorage(STORAGE_KEYS.documentViews, views);
+  }
+}
+
+export function getRecentDocumentViews(limit: number = 10): RecentView[] {
+  const views = getDocumentViews()
+    .sort((a, b) => new Date(b.viewedAt).getTime() - new Date(a.viewedAt).getTime())
+    .slice(0, limit);
+  const documents = getDocuments();
+  const leads = getLeads();
+
+  return views.map((v) => {
+    const doc = documents.find((d) => d.id === v.documentId);
+    const lead = doc ? leads.find((l) => l.id === doc.leadId) : undefined;
+    return {
+      documentId: v.documentId,
+      documentTitle: doc?.title || "",
+      leadId: doc?.leadId || "",
+      leadCompanyName: lead?.companyName || "",
+      viewedAt: v.viewedAt,
+      duration: v.duration,
+    };
+  }).filter((v) => v.leadId !== "");
+}
+
+// ========================================
 // 統計
 // ========================================
 export function getStats() {
@@ -231,4 +337,47 @@ export function seedDemoData(): void {
   ];
 
   activitiesData.forEach((a) => createActivity(a));
+
+  // ドキュメントのデモデータ
+  const doc1 = createDocument({
+    leadId: createdLeads[1].id,
+    title: "サービス概要資料_v2.pdf",
+    type: "pdf",
+    filePath: "",
+    fileData: "",
+    externalUrl: "",
+    createdBy: "山田",
+  });
+  const doc2 = createDocument({
+    leadId: createdLeads[2].id,
+    title: "導入事例集",
+    type: "url",
+    filePath: "",
+    fileData: "",
+    externalUrl: "https://example.com/case-studies",
+    createdBy: "田村",
+  });
+  const doc3 = createDocument({
+    leadId: createdLeads[3].id,
+    title: "料金プラン比較表.pdf",
+    type: "pdf",
+    filePath: "",
+    fileData: "",
+    externalUrl: "",
+    createdBy: "山田",
+  });
+
+  // 閲覧履歴のデモデータ
+  const twoHoursAgo = new Date(today);
+  twoHoursAgo.setHours(twoHoursAgo.getHours() - 2);
+  const thirtyMinAgo = new Date(today);
+  thirtyMinAgo.setMinutes(thirtyMinAgo.getMinutes() - 30);
+
+  const viewsData: DocumentView[] = [
+    { id: generateId(), documentId: doc1.id, viewedAt: twoHoursAgo.toISOString(), duration: 150, ipAddress: "203.0.113.1", userAgent: "Chrome/120" },
+    { id: generateId(), documentId: doc1.id, viewedAt: thirtyMinAgo.toISOString(), duration: 85, ipAddress: "203.0.113.1", userAgent: "Chrome/120" },
+    { id: generateId(), documentId: doc2.id, viewedAt: yesterday.toISOString(), duration: 45, ipAddress: "198.51.100.5", userAgent: "Safari/17" },
+    { id: generateId(), documentId: doc3.id, viewedAt: thirtyMinAgo.toISOString(), duration: 210, ipAddress: "192.0.2.10", userAgent: "Chrome/120" },
+  ];
+  saveToStorage(STORAGE_KEYS.documentViews, viewsData);
 }

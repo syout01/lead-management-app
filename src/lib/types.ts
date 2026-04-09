@@ -83,3 +83,55 @@ export interface Activity {
   createdAt: string;
   createdBy: string;        // 記録者
 }
+
+// ========================================
+// ドキュメント（資料トラッキング）
+// ========================================
+
+export type DocumentType = "pdf" | "url";
+
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  pdf: "PDF",
+  url: "外部URL",
+};
+
+// ドキュメント情報
+export interface TrackedDocument {
+  id: string;
+  leadId: string;
+  title: string;
+  type: DocumentType;
+  filePath: string;         // Supabase Storage path
+  fileData: string;         // base64 (localStorage fallback)
+  externalUrl: string;      // type='url'の場合
+  trackingId: string;       // ユニークスラッグ
+  createdBy: string;
+  createdAt: string;
+}
+
+// ドキュメント閲覧履歴
+export interface DocumentView {
+  id: string;
+  documentId: string;
+  viewedAt: string;
+  duration: number;         // 秒
+  ipAddress: string;
+  userAgent: string;
+}
+
+// ドキュメント + 集計情報（UI表示用）
+export interface DocumentWithStats extends TrackedDocument {
+  viewCount: number;
+  lastViewedAt: string | null;
+  totalDuration: number;    // 秒
+}
+
+// 最近の閲覧（ダッシュボード用）
+export interface RecentView {
+  documentId: string;
+  documentTitle: string;
+  leadId: string;
+  leadCompanyName: string;
+  viewedAt: string;
+  duration: number;
+}

@@ -7,7 +7,7 @@
 import { isSupabaseConfigured } from "./supabase";
 import * as local from "./store";
 import * as db from "./supabase-store";
-import { Company, Lead, Activity, LeadStatus } from "./types";
+import { Company, Lead, Activity, LeadStatus, TrackedDocument, DocumentView, RecentView } from "./types";
 
 // ========================================
 // 企業
@@ -108,6 +108,69 @@ export async function fetchStats() {
   if (isSupabaseConfigured) return db.getStatsDB();
   local.seedDemoData();
   return local.getStats();
+}
+
+// ========================================
+// ドキュメント
+// ========================================
+export async function fetchDocumentsByLead(leadId: string): Promise<TrackedDocument[]> {
+  if (isSupabaseConfigured) return db.getDocumentsByLeadDB(leadId);
+  return local.getDocumentsByLead(leadId);
+}
+
+export async function fetchDocumentByTrackingId(trackingId: string): Promise<TrackedDocument | null | undefined> {
+  if (isSupabaseConfigured) return db.getDocumentByTrackingIdDB(trackingId);
+  return local.getDocumentByTrackingId(trackingId);
+}
+
+function generateTrackingId(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "";
+  const arr = new Uint8Array(10);
+  crypto.getRandomValues(arr);
+  for (let i = 0; i < 10; i++) {
+    result += chars[arr[i] % chars.length];
+  }
+  return result;
+}
+
+export async function addDocument(
+  data: Omit<TrackedDocument, "id" | "createdAt" | "trackingId">,
+  userId?: string
+): Promise<TrackedDocument> {
+  const trackingId = generateTrackingId();
+  if (isSupabaseConfigured && userId) return db.createDocumentDB(data, trackingId, userId);
+  return local.createDocument(data);
+}
+
+export async function removeDocument(id: string): Promise<void> {
+  if (isSupabaseConfigured) return db.deleteDocumentDB(id);
+  local.deleteDocument(id);
+}
+
+// ========================================
+// ドキュメント閲覧履歴
+// ========================================
+export async function fetchDocumentViews(documentId: string): Promise<DocumentView[]> {
+  if (isSupabaseConfigured) return db.getDocumentViewsDB(documentId);
+  return local.getDocumentViewsByDoc(documentId);
+}
+
+export async function addDocumentView(
+  data: Omit<DocumentView, "id" | "viewedAt">
+): Promise<DocumentView> {
+  if (isSupabaseConfigured) return db.createDocumentViewDB(data);
+  return local.createDocumentView(data);
+}
+
+export async function updateViewDuration(id: string, duration: number): Promise<void> {
+  if (isSupabaseConfigured) return db.updateDocumentViewDurationDB(id, duration);
+  local.updateDocumentViewDuration(id, duration);
+}
+
+export async function fetchRecentViews(limit?: number): Promise<RecentView[]> {
+  if (isSupabaseConfigured) return db.getRecentDocumentViewsDB(limit);
+  return local.getRecentDocumentViews(limit);
 }
 
 // ========================================

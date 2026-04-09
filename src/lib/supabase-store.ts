@@ -4,7 +4,7 @@
 // ========================================
 
 import { supabase } from "./supabase";
-import { Company, Lead, Activity, LeadStatus, ActivityType } from "./types";
+import { Company, Lead, Activity, LeadStatus, ActivityType, TrackedDocument, DocumentView, DocumentType, RecentView } from "./types";
 
 // ========================================
 // 企業（Company）操作
@@ -230,6 +230,112 @@ export async function getStatsDB() {
 }
 
 // ========================================
+// ドキュメント（TrackedDocument）操作
+// ========================================
+export async function getDocumentsByLeadDB(leadId: string): Promise<TrackedDocument[]> {
+  const { data, error } = await supabase
+    .from("documents")
+    .select("*")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(mapDocument);
+}
+
+export async function getDocumentByTrackingIdDB(trackingId: string): Promise<TrackedDocument | null> {
+  const { data, error } = await supabase
+    .from("documents")
+    .select("*")
+    .eq("tracking_id", trackingId)
+    .single();
+  if (error) return null;
+  return mapDocument(data);
+}
+
+export async function createDocumentDB(
+  doc: Omit<TrackedDocument, "id" | "createdAt" | "trackingId">,
+  trackingId: string,
+  userId: string
+): Promise<TrackedDocument> {
+  const { data, error } = await supabase
+    .from("documents")
+    .insert({
+      lead_id: doc.leadId,
+      title: doc.title,
+      type: doc.type,
+      file_path: doc.filePath,
+      external_url: doc.externalUrl,
+      tracking_id: trackingId,
+      created_by: userId,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return mapDocument(data);
+}
+
+export async function deleteDocumentDB(id: string): Promise<void> {
+  const { error } = await supabase.from("documents").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ========================================
+// ドキュメント閲覧履歴（DocumentView）操作
+// ========================================
+export async function getDocumentViewsDB(documentId: string): Promise<DocumentView[]> {
+  const { data, error } = await supabase
+    .from("document_views")
+    .select("*")
+    .eq("document_id", documentId)
+    .order("viewed_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(mapDocumentView);
+}
+
+export async function createDocumentViewDB(
+  view: Omit<DocumentView, "id" | "viewedAt">
+): Promise<DocumentView> {
+  const { data, error } = await supabase
+    .from("document_views")
+    .insert({
+      document_id: view.documentId,
+      duration: view.duration,
+      ip_address: view.ipAddress,
+      user_agent: view.userAgent,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return mapDocumentView(data);
+}
+
+export async function updateDocumentViewDurationDB(id: string, duration: number): Promise<void> {
+  const { error } = await supabase
+    .from("document_views")
+    .update({ duration })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function getRecentDocumentViewsDB(limit: number = 10): Promise<RecentView[]> {
+  const { data, error } = await supabase
+    .from("document_views")
+    .select("*, documents(id, title, lead_id, leads(company_name))")
+    .order("viewed_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data || []).map((row: any) => ({
+    documentId: row.document_id,
+    documentTitle: row.documents?.title || "",
+    leadId: row.documents?.lead_id || "",
+    leadCompanyName: row.documents?.leads?.company_name || "",
+    viewedAt: row.viewed_at,
+    duration: row.duration,
+  })).filter((v: RecentView) => v.leadId !== "");
+}
+
+// ========================================
 // DBレコード → フロントエンド型のマッピング
 // ========================================
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -278,5 +384,33 @@ function mapActivity(row: any): Activity {
     result: row.result || "",
     createdAt: row.created_at,
     createdBy: row.created_by_name || "",
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapDocument(row: any): TrackedDocument {
+  return {
+    id: row.id,
+    leadId: row.lead_id,
+    title: row.title,
+    type: row.type as DocumentType,
+    filePath: row.file_path || "",
+    fileData: "",
+    externalUrl: row.external_url || "",
+    trackingId: row.tracking_id,
+    createdBy: row.created_by || "",
+    createdAt: row.created_at,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapDocumentView(row: any): DocumentView {
+  return {
+    id: row.id,
+    documentId: row.document_id,
+    viewedAt: row.viewed_at,
+    duration: row.duration || 0,
+    ipAddress: row.ip_address || "",
+    userAgent: row.user_agent || "",
   };
 }
