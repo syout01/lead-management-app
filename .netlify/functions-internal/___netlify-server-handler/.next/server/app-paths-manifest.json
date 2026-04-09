@@ -7,5 +7,6 @@
   "/_not-found/page": "app/_not-found/page.js",
   "/api/track/route": "app/api/track/route.js",
   "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/lp/page": "app/lp/page.js",
   "/view/[trackingId]/page": "app/view/[trackingId]/page.js"
 }

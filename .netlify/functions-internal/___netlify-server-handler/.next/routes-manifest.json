@@ -81,6 +81,12 @@
       "regex": "^/leads(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/leads(?:/)?$"
+    },
+    {
+      "page": "/lp",
+      "regex": "^/lp(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/lp(?:/)?$"
     }
   ],
   "dataRoutes": [],

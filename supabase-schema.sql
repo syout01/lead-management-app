@@ -108,7 +108,16 @@ CREATE TABLE document_views (
   user_agent TEXT DEFAULT ''
 );
 
--- 8. インデックス
+-- 8. LP登録者テーブル
+CREATE TABLE signups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company TEXT NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 9. インデックス
 CREATE INDEX idx_leads_status ON leads(status);
 CREATE INDEX idx_leads_next_action_date ON leads(next_action_date);
 CREATE INDEX idx_leads_created_by ON leads(created_by);
@@ -119,22 +128,50 @@ CREATE INDEX idx_documents_tracking_id ON documents(tracking_id);
 CREATE INDEX idx_document_views_document_id ON document_views(document_id);
 CREATE INDEX idx_document_views_viewed_at ON document_views(viewed_at);
 
--- 9. Row Level Security（RLS）
--- 認証済みユーザーは全データにアクセス可能（チーム利用前提）
+-- 10. Row Level Security（RLS）
+-- ユーザーごとにデータを分離（created_by = 自分のみ）
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "authenticated_profiles" ON profiles FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "authenticated_companies" ON companies FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "authenticated_leads" ON leads FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "authenticated_activities" ON activities FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE document_views ENABLE ROW LEVEL SECURITY;
+ALTER TABLE signups ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "authenticated_documents" ON documents FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "authenticated_views" ON document_views FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "anon_insert_views" ON document_views FOR INSERT TO anon WITH CHECK (true);
+-- プロフィール: 自分のプロフィールのみ
+CREATE POLICY "own_profile" ON profiles FOR ALL TO authenticated
+  USING (id = auth.uid()) WITH CHECK (id = auth.uid());
+
+-- 企業: 自分が作成したもののみ
+CREATE POLICY "own_companies" ON companies FOR ALL TO authenticated
+  USING (created_by = auth.uid()) WITH CHECK (created_by = auth.uid());
+
+-- リード: 自分が作成したもののみ
+CREATE POLICY "own_leads" ON leads FOR ALL TO authenticated
+  USING (created_by = auth.uid()) WITH CHECK (created_by = auth.uid());
+
+-- アクティビティ: 自分のリードに紐づくもの
+CREATE POLICY "own_activities" ON activities FOR ALL TO authenticated
+  USING (lead_id IN (SELECT id FROM leads WHERE created_by = auth.uid()))
+  WITH CHECK (lead_id IN (SELECT id FROM leads WHERE created_by = auth.uid()));
+
+-- ドキュメント: 自分のリードに紐づくもの（認証ユーザー）
+CREATE POLICY "own_documents" ON documents FOR ALL TO authenticated
+  USING (lead_id IN (SELECT id FROM leads WHERE created_by = auth.uid()))
+  WITH CHECK (lead_id IN (SELECT id FROM leads WHERE created_by = auth.uid()));
+
+-- ドキュメント: 匿名ユーザーはtracking_idで閲覧可能（ビューワーページ用）
 CREATE POLICY "anon_read_documents" ON documents FOR SELECT TO anon USING (true);
+
+-- 閲覧履歴: 認証ユーザーは自分のドキュメントの閲覧履歴を見れる
+CREATE POLICY "own_document_views" ON document_views FOR ALL TO authenticated
+  USING (document_id IN (SELECT id FROM documents WHERE lead_id IN (SELECT id FROM leads WHERE created_by = auth.uid())))
+  WITH CHECK (document_id IN (SELECT id FROM documents WHERE lead_id IN (SELECT id FROM leads WHERE created_by = auth.uid())));
+
+-- 閲覧履歴: 匿名ユーザーはINSERTのみ（トラッキング記録用）
+CREATE POLICY "anon_insert_views" ON document_views FOR INSERT TO anon WITH CHECK (true);
+
+-- LP登録: 匿名ユーザーがINSERT可能（LP申し込みフォーム用）
+CREATE POLICY "anon_insert_signups" ON signups FOR INSERT TO anon WITH CHECK (true);
+-- LP登録: 管理者は全件閲覧可能
+CREATE POLICY "authenticated_read_signups" ON signups FOR SELECT TO authenticated USING (true);

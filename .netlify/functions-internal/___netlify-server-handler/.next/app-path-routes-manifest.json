@@ -7,5 +7,6 @@
   "/_not-found/page": "/_not-found",
   "/api/track/route": "/api/track",
   "/favicon.ico/route": "/favicon.ico",
+  "/lp/page": "/lp",
   "/view/[trackingId]/page": "/view/[trackingId]"
 }

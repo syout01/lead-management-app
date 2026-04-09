@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import {
   Target,
   FileText,
@@ -23,17 +24,53 @@ export default function LandingPage() {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const [error, setError] = useState("");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.company || !formData.name || !formData.email) return;
     setSubmitting(true);
+    setError("");
 
     try {
-      // localStorageに保存（デモ用）
-      const signups = JSON.parse(localStorage.getItem("lm_signups") || "[]");
-      signups.push({ ...formData, createdAt: new Date().toISOString() });
-      localStorage.setItem("lm_signups", JSON.stringify(signups));
+      if (isSupabaseConfigured) {
+        // 1. signupsテーブルに登録情報を保存
+        await supabase.from("signups").insert({
+          company: formData.company,
+          name: formData.name,
+          email: formData.email,
+        });
+
+        // 2. Supabase Authでアカウントを自動作成
+        const tempPassword = crypto.randomUUID().slice(0, 12);
+        const { error: signUpError } = await supabase.auth.signUp({
+          email: formData.email,
+          password: tempPassword,
+          options: {
+            data: {
+              display_name: formData.name,
+              company: formData.company,
+            },
+          },
+        });
+
+        if (signUpError) {
+          // 既にアカウントがある場合は無視
+          if (!signUpError.message.includes("already registered")) {
+            setError("登録に失敗しました。もう一度お試しください。");
+            return;
+          }
+        }
+      } else {
+        // localStorageに保存（デモ用）
+        const signups = JSON.parse(localStorage.getItem("lm_signups") || "[]");
+        signups.push({ ...formData, createdAt: new Date().toISOString() });
+        localStorage.setItem("lm_signups", JSON.stringify(signups));
+      }
+
       setSubmitted(true);
+    } catch {
+      setError("登録に失敗しました。もう一度お試しください。");
     } finally {
       setSubmitting(false);
     }
@@ -349,6 +386,9 @@ export default function LandingPage() {
                     </>
                   )}
                 </button>
+                {error && (
+                  <p className="text-sm text-red-600 text-center">{error}</p>
+                )}
                 <p className="text-xs text-gray-400 text-center">
                   登録後すぐにご利用いただけます。料金は一切かかりません。
                 </p>
