@@ -98,11 +98,11 @@ function LeadsPageContent() {
   };
 
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="p-4 sm:p-8 max-w-7xl">
       {/* ヘッダー */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">リード管理</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">リード管理</h1>
           <p className="text-gray-500 text-sm mt-1">
             全{filteredLeads.length}件のリード
           </p>
@@ -115,7 +115,7 @@ function LeadsPageContent() {
             className="gap-1.5"
           >
             <Upload className="w-3.5 h-3.5" />
-            インポート
+            <span className="hidden sm:inline">インポート</span>
           </Button>
           <Button
             variant="outline"
@@ -124,7 +124,7 @@ function LeadsPageContent() {
             className="gap-1.5"
           >
             <Download className="w-3.5 h-3.5" />
-            エクスポート
+            <span className="hidden sm:inline">エクスポート</span>
           </Button>
           <Button
             onClick={() => {
@@ -135,7 +135,7 @@ function LeadsPageContent() {
             className="gap-1.5"
           >
             <Plus className="w-3.5 h-3.5" />
-            リード追加
+            追加
           </Button>
         </div>
       </div>
@@ -177,8 +177,39 @@ function LeadsPageContent() {
         </CardContent>
       </Card>
 
-      {/* リード一覧テーブル */}
-      <Card className="border-0 shadow-sm">
+      {/* モバイル: カード表示 */}
+      <div className="sm:hidden space-y-3">
+        {filteredLeads.length === 0 ? (
+          <Card className="border-0 shadow-sm">
+            <CardContent className="py-12 text-center text-gray-400">リードが見つかりません</CardContent>
+          </Card>
+        ) : (
+          filteredLeads.map((lead) => (
+            <Link key={lead.id} href={`/leads/${lead.id}`}>
+              <Card className="border-0 shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{lead.companyName}</p>
+                      <p className="text-xs text-gray-500">{lead.contactName} / {lead.contactTitle}</p>
+                    </div>
+                    <Badge className={`${LEAD_STATUS_COLORS[lead.status]} text-xs ml-2 flex-shrink-0`} variant="secondary">
+                      {LEAD_STATUS_LABELS[lead.status]}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>{lead.assignee || "-"}</span>
+                    <span>{lead.nextAction ? `${lead.nextAction}${lead.nextActionDate ? ` (${lead.nextActionDate})` : ""}` : "-"}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))
+        )}
+      </div>
+
+      {/* デスクトップ: テーブル表示 */}
+      <Card className="border-0 shadow-sm hidden sm:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -195,55 +226,33 @@ function LeadsPageContent() {
             <TableBody>
               {filteredLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={7}
-                    className="text-center py-12 text-gray-400"
-                  >
+                  <TableCell colSpan={7} className="text-center py-12 text-gray-400">
                     リードが見つかりません
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredLeads.map((lead) => (
-                  <TableRow
-                    key={lead.id}
-                    className="cursor-pointer hover:bg-gray-50"
-                  >
+                  <TableRow key={lead.id} className="cursor-pointer hover:bg-gray-50">
                     <TableCell className="font-medium">
-                      <Link
-                        href={`/leads/${lead.id}`}
-                        className="hover:text-blue-600"
-                      >
-                        {lead.companyName}
-                      </Link>
+                      <Link href={`/leads/${lead.id}`} className="hover:text-blue-600">{lead.companyName}</Link>
                     </TableCell>
                     <TableCell>
                       <div>
                         <p className="text-sm">{lead.contactName}</p>
-                        <p className="text-xs text-gray-400">
-                          {lead.contactTitle}
-                        </p>
+                        <p className="text-xs text-gray-400">{lead.contactTitle}</p>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        className={`${LEAD_STATUS_COLORS[lead.status]} text-xs`}
-                        variant="secondary"
-                      >
+                      <Badge className={`${LEAD_STATUS_COLORS[lead.status]} text-xs`} variant="secondary">
                         {LEAD_STATUS_LABELS[lead.status]}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-gray-600">
-                      {lead.source}
-                    </TableCell>
+                    <TableCell className="text-sm text-gray-600">{lead.source}</TableCell>
                     <TableCell className="text-sm">{lead.assignee}</TableCell>
                     <TableCell>
                       <div>
                         <p className="text-sm">{lead.nextAction || "-"}</p>
-                        {lead.nextActionDate && (
-                          <p className="text-xs text-gray-400">
-                            {lead.nextActionDate}
-                          </p>
-                        )}
+                        {lead.nextActionDate && <p className="text-xs text-gray-400">{lead.nextActionDate}</p>}
                       </div>
                     </TableCell>
                     <TableCell>
