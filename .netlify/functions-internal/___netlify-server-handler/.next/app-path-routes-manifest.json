@@ -1,9 +1,11 @@
 {
+  "/(app)/auth/page": "/auth",
+  "/(app)/leads/[id]/page": "/leads/[id]",
+  "/(app)/leads/page": "/leads",
+  "/(app)/page": "/",
   "/_global-error/page": "/_global-error",
   "/_not-found/page": "/_not-found",
-  "/auth/page": "/auth",
+  "/api/track/route": "/api/track",
   "/favicon.ico/route": "/favicon.ico",
-  "/leads/[id]/page": "/leads/[id]",
-  "/leads/page": "/leads",
-  "/page": "/"
+  "/view/[trackingId]/page": "/view/[trackingId]"
 }
